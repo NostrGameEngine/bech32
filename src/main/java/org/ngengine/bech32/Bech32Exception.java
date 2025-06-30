@@ -31,6 +31,9 @@
 
 package org.ngengine.bech32;
 
+/**
+ * A generic exception for Bech32 operations.
+ */
 public class Bech32Exception extends Exception {
 
     private static final long serialVersionUID = 1L;

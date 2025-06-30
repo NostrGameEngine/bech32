@@ -31,6 +31,10 @@
 
 package org.ngengine.bech32;
 
+/**
+ * Exception thrown when a Bech32 decoding operation fails due to an invalid checksum.
+ * This indicates that the checksum does not match the expected value for the given data eg. due to corruption or tampering.
+ */
 public class Bech32InvalidChecksumException extends Bech32Exception {
 
     private static final long serialVersionUID = 1L;

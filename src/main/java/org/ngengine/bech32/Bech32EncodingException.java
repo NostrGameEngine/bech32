@@ -31,6 +31,10 @@
 
 package org.ngengine.bech32;
 
+/**
+ * Exception thrown when a Bech32 encoding operation fails.
+ * This can happen due to various reasons such as invalid input data or other encoding errors.
+ */
 public class Bech32EncodingException extends Bech32Exception {
 
     private static final long serialVersionUID = 1L;

@@ -31,6 +31,10 @@
 
 package org.ngengine.bech32;
 
+/**
+ * Exception thrown when a Bech32 decoding operation fails due to the characters in the
+ * data being out of the valid range. This indicates a malformed input bech32 string.
+ */
 public class Bech32InvalidRangeException extends Bech32Exception {
 
     private static final long serialVersionUID = 1L;

@@ -46,11 +46,32 @@ public class Bech32 {
     private static final int[] GENERATORS = { 0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3 };
     private static final char BECH32_SEPARATOR = '1';
 
+    /**
+     * Encode some arbitrary data into a Bech32 string.
+     *
+     * <p>
+     * This method will internally allocate a 6 byte array to hold the checksum.
+     * If you want to avoid this internal allocation, use the other overload that takes a byte array as argument
+     * </p>
+     *
+     * @param hrp the human readable part (the prefix), must be utf-8 encoded
+     * @param data a ByteBuffer containing the data to encode, must be at position 0 and limit set to the length of the data
+     * @return the Bech32 encoded string
+     * @throws Bech32EncodingException
+     */
     public static String bech32Encode(byte[] hrp, ByteBuffer data) throws Bech32EncodingException {
         byte[] chk = new byte[6];
         return bech32Encode(hrp, data, chk);
     }
 
+    /**
+     * Encode some arbitrary data into a Bech32 string.
+     * @param hrp the human readable part (the prefix), must be utf-8 encoded
+     * @param data a ByteBuffer containing the data to encode, must be at position 0 and limit set to the length of the data
+     * @param chkOut a byte array of length 6 that will be filled with the checksum
+     * @return
+     * @throws Bech32EncodingException
+     */
     public static String bech32Encode(byte[] hrp, ByteBuffer data, byte[] chkOut) throws Bech32EncodingException {
         if (chkOut == null || chkOut.length < 6) {
             throw new Bech32EncodingException("invalid checksum buffer");
@@ -88,6 +109,14 @@ public class Bech32 {
         return new String(ret, StandardCharsets.UTF_8);
     }
 
+    /**
+     * Decode a Bech32 string into a ByteBuffer.
+     * @param bech the Bech32 encoded string, must be lower case
+     * @return a ByteBuffer containing the decoded data, the position will be set to 0 and the limit to the length of the data
+     * @throws Bech32DecodingException
+     * @throws Bech32InvalidChecksumException
+     * @throws Bech32InvalidRangeException
+     */
     public static ByteBuffer bech32Decode(String bech)
         throws Bech32DecodingException, Bech32InvalidChecksumException, Bech32InvalidRangeException {
         byte[] bytes = getLowerCaseBytes(bech);
