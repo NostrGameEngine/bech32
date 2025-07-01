@@ -33,6 +33,9 @@ package org.ngengine.bech32;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 
+import jakarta.annotation.Nonnull;
+import jakarta.annotation.Nullable;
+
 // Bech32 encoder/decoder
 //      based on https://github.com/SamouraiDev/bech32/tree/master
 //      this implementation aims to be faster reducing memory allocations,
@@ -59,7 +62,8 @@ public class Bech32 {
      * @return the Bech32 encoded string
      * @throws Bech32EncodingException
      */
-    public static String bech32Encode(byte[] hrp, ByteBuffer data) throws Bech32EncodingException {
+    @Nonnull
+    public static String bech32Encode(@Nonnull byte[] hrp, @Nonnull ByteBuffer data) throws Bech32EncodingException {
         byte[] chk = new byte[6];
         return bech32Encode(hrp, data, chk);
     }
@@ -72,7 +76,9 @@ public class Bech32 {
      * @return
      * @throws Bech32EncodingException
      */
-    public static String bech32Encode(byte[] hrp, ByteBuffer data, byte[] chkOut) throws Bech32EncodingException {
+    @Nonnull
+    public static String bech32Encode(
+            @Nonnull  byte[] hrp, @Nonnull ByteBuffer data, @Nonnull byte[] chkOut) throws Bech32EncodingException {
         if (chkOut == null || chkOut.length < 6) {
             throw new Bech32EncodingException("invalid checksum buffer");
         }
@@ -117,7 +123,8 @@ public class Bech32 {
      * @throws Bech32InvalidChecksumException
      * @throws Bech32InvalidRangeException
      */
-    public static ByteBuffer bech32Decode(String bech)
+    @Nonnull
+    public static ByteBuffer bech32Decode(@Nonnull String bech)
         throws Bech32DecodingException, Bech32InvalidChecksumException, Bech32InvalidRangeException {
         byte[] bytes = getLowerCaseBytes(bech);
 
@@ -152,7 +159,7 @@ public class Bech32 {
         return out.slice();
     }
 
-    private static int polymod(byte hrp[], int hrpLength, ByteBuffer data, byte[] zeroes, int zeroesOffset) {
+    private static int polymod(@Nonnull byte hrp[], int hrpLength, @Nullable ByteBuffer data, @Nonnull byte[] zeroes, int zeroesOffset) {
         int chk = 1;
 
         // expand an process hrp
@@ -191,12 +198,12 @@ public class Bech32 {
         return chk;
     }
 
-    private static boolean verifyChecksum(byte[] combinedData, int hrpLength, int dataOffset) {
+    private static boolean verifyChecksum(@Nonnull byte[] combinedData, int hrpLength, int dataOffset) {
         int p = polymod(combinedData, hrpLength, null, combinedData, dataOffset);
         return (1 == p);
     }
 
-    private static void createChecksum(byte[] hrp, int hrpLength, ByteBuffer data, byte[] ret) {
+    private static void createChecksum(@Nonnull byte[] hrp, int hrpLength, @Nonnull ByteBuffer data, @Nonnull byte[] ret) {
         int polymod = polymod(hrp, hrpLength, data, ZEROES, 0) ^ 1;
         for (int i = 0; i < 6; i++) {
             ret[i] = (byte) ((polymod >> 5 * (5 - i)) & 0x1f);
@@ -212,7 +219,8 @@ public class Bech32 {
         return chk;
     }
 
-    private static byte[] getLowerCaseBytes(String bech) throws Bech32InvalidRangeException {
+    @Nonnull
+    private static byte[] getLowerCaseBytes(@Nonnull String bech) throws Bech32InvalidRangeException {
         int length = bech.length();
         byte[] result = new byte[length];
         for (int i = 0; i < length; i++) {
@@ -229,7 +237,8 @@ public class Bech32 {
         return result;
     }
 
-    private static ByteBuffer convertBits(ByteBuffer in, int skip, int fromBits, int toBits, boolean pad) {
+    @Nonnull
+    private static ByteBuffer convertBits(@Nonnull ByteBuffer in, int skip, int fromBits, int toBits, boolean pad) {
         int outCapacity = (in.limit() * fromBits + toBits - 1) / toBits;
         ByteBuffer output = ByteBuffer.allocate(outCapacity);
 

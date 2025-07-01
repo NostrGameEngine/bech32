@@ -63,6 +63,8 @@ repositories {
 
 dependencies {
     testImplementation libs.junit
+    implementation 'jakarta.annotation:jakarta.annotation-api:2.1.1'
+
 }
 
 java {
