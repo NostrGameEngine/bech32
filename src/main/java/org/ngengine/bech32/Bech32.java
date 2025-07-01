@@ -30,11 +30,10 @@
  */
 package org.ngengine.bech32;
 
-import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
-
 import jakarta.annotation.Nonnull;
 import jakarta.annotation.Nullable;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 
 // Bech32 encoder/decoder
 //      based on https://github.com/SamouraiDev/bech32/tree/master
@@ -77,8 +76,8 @@ public class Bech32 {
      * @throws Bech32EncodingException
      */
     @Nonnull
-    public static String bech32Encode(
-            @Nonnull  byte[] hrp, @Nonnull ByteBuffer data, @Nonnull byte[] chkOut) throws Bech32EncodingException {
+    public static String bech32Encode(@Nonnull byte[] hrp, @Nonnull ByteBuffer data, @Nonnull byte[] chkOut)
+        throws Bech32EncodingException {
         if (chkOut == null || chkOut.length < 6) {
             throw new Bech32EncodingException("invalid checksum buffer");
         }
@@ -159,7 +158,13 @@ public class Bech32 {
         return out.slice();
     }
 
-    private static int polymod(@Nonnull byte hrp[], int hrpLength, @Nullable ByteBuffer data, @Nonnull byte[] zeroes, int zeroesOffset) {
+    private static int polymod(
+        @Nonnull byte hrp[],
+        int hrpLength,
+        @Nullable ByteBuffer data,
+        @Nonnull byte[] zeroes,
+        int zeroesOffset
+    ) {
         int chk = 1;
 
         // expand an process hrp
