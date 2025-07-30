@@ -35,12 +35,9 @@ import jakarta.annotation.Nullable;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 
-// Bech32 encoder/decoder
-//      based on https://github.com/SamouraiDev/bech32/tree/master
-//      this implementation aims to be faster reducing memory allocations,
-//      copying and gc pressure.
-// + thread safe
-
+/**
+ * Fast, low memory, thread safe and gc friendly Bech32 encoder/decoder.
+ */
 public class Bech32 {
 
     private static final String CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
