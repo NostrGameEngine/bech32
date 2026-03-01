@@ -90,11 +90,11 @@ public class Bech32 {
         }
         ByteBuffer src = data.slice();
         int dataLen = src.remaining();
-        
+
         // Calculate exact output size: HRP + '1' + (data8 * 8 + 4) / 5 + 6
         int data5Len = (dataLen * 8 + 4) / 5;
         int outputSize = hrp.length + 1 + data5Len + 6;
-        
+
         char[] output = new char[outputSize];
         int outPos = 0;
 
@@ -114,7 +114,7 @@ public class Bech32 {
 
         // initialize checksum
         int chk = 1;
-        
+
         // process HRP
         for (int i = 0; i < hrpLower.length; i++) {
             byte b = hrpLower[i];
@@ -122,7 +122,7 @@ public class Bech32 {
             chk = polymod(b, chk);
         }
         chk = polymod((byte) 0x00, chk);
-        
+
         for (int i = 0; i < hrpLower.length; i++) {
             byte b = (byte) (hrpLower[i] & 0x1f);
             chk = polymod(b, chk);
@@ -220,7 +220,7 @@ public class Bech32 {
         // extract data portion (5-bit values, excluding HRP and checksum)
         int dataStart = hrpLength + 1;
         int dataLen = bytes.length - dataStart - 6; // -6 for checksum
-        
+
         // pre-calculate output size
         int outCapacity = (dataLen * 5) / 8;
         byte[] output = new byte[outCapacity];
@@ -233,7 +233,7 @@ public class Bech32 {
             int value = bytes[dataStart + i];
             acc = (acc << 5) | value;
             bits += 5;
-            
+
             while (bits >= 8) {
                 bits -= 8;
                 int byte8 = (acc >> bits) & 0xff;
@@ -339,5 +339,4 @@ public class Bech32 {
         }
         return result;
     }
-
 }
