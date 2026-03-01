@@ -67,7 +67,7 @@ public class Bech32 {
     /**
      * Encode some arbitrary data into a Bech32 string.
      * @param hrp the human readable part (the prefix), must be utf-8 encoded
-     * @param data a ByteBuffer containing the data to encode, must be at position 0 and limit set to the length of the data
+     * @param data a ByteBuffer containing the data to encode, must have limit set to the length of the data to encode
      * @param chkOut a byte array of length 6 that will be filled with the checksum
      * @return
      * @throws Bech32EncodingException
@@ -183,8 +183,9 @@ public class Bech32 {
 
         // process data
         if (data != null) {
-            for (int i = 0; i < data.limit(); i++) {
-                byte b = data.get(i);
+            ByteBuffer src = data.slice();
+            for (int i = 0; i < src.remaining(); i++) {
+                byte b = src.get(i);
                 chk = polymod(b, chk);
             }
         }
@@ -241,15 +242,17 @@ public class Bech32 {
 
     @Nonnull
     private static ByteBuffer convertBits(@Nonnull ByteBuffer in, int skip, int fromBits, int toBits, boolean pad) {
-        int outCapacity = (in.limit() * fromBits + toBits - 1) / toBits;
+        ByteBuffer src = in.slice();
+        
+        int outCapacity = (src.remaining() * fromBits + toBits - 1) / toBits;
         ByteBuffer output = ByteBuffer.allocate(outCapacity);
 
         int acc = 0;
         int bits = 0;
         final int maxv = (1 << toBits) - 1;
 
-        for (int i = skip; i < in.limit(); i++) {
-            int value = in.get(i) & 0xFF;
+        for (int i = 0; i < src.remaining(); i++) {
+            int value = src.get(i) & 0xFF;
             if ((value >> fromBits) != 0) {
                 throw new IllegalArgumentException("input value is outside of range");
             }
