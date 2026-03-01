@@ -4,7 +4,8 @@ plugins {
     id 'maven-publish'
     id 'signing'
     id "com.diffplug.spotless" version "7.0.2"  
-    id "io.github.gradle-nexus.publish-plugin" version "2.0.0" 
+    id "io.github.gradle-nexus.publish-plugin" version "2.0.0"
+    id 'jacoco'
 }
 
 
@@ -63,6 +64,7 @@ repositories {
 
 dependencies {
     testImplementation libs.junit
+    testImplementation 'com.google.code.gson:gson:2.10.1'
     implementation 'jakarta.annotation:jakarta.annotation-api:2.1.1'
 
 }
@@ -73,6 +75,42 @@ java {
     }
     withJavadocJar()
     withSourcesJar()
+}
+
+jacoco {
+    toolVersion = "0.8.10"
+}
+
+test {
+    useJUnit()
+}
+
+jacocoTestReport {
+    dependsOn test
+    reports {
+        xml.required = true
+        html.required = true
+        csv.required = false
+    }
+    
+    afterEvaluate {
+        classDirectories.setFrom(files(classDirectories.files.collect {
+            fileTree(dir: it, exclude: [
+                '**/Bech32Exception.class',
+                '**/Bech32DecodingException.class',
+                '**/Bech32EncodingException.class',
+                '**/Bech32InvalidChecksumException.class',
+                '**/Bech32InvalidRangeException.class'
+            ])
+        }))
+    }
+}
+
+tasks.register('coverageReport') {
+    dependsOn jacocoTestReport
+    doLast {
+        println "Code coverage report generated at: build/reports/jacoco/test/html/index.html"
+    }
 }
 
 
