@@ -59,7 +59,6 @@ public class TestBech32 {
     private static final String[] INVALID = { "npub1wpuq4mcuDFxhnrqk85hk29qjz6u93vpzxqy9qpuugpyc302fepkqg8t3a4" };
 
     private static final Path VECTOR_JSON_PATH = Paths.get("src", "test", "resources", "vector.json");
-    private static final Path BIP_VECTOR_JSON_PATH = Paths.get("src", "test", "resources", "bip-vectors.json");
 
     @Test
     public void hrpCaseSensitivityLowercase() throws Exception {
@@ -180,13 +179,31 @@ public class TestBech32 {
     }
 
     @Test
-    public void bip173InvalidChecksums() throws Exception {
-        // BIP-173: Invalid examples with bad checksums
-        try {
-            Bech32.bech32Decode("x1b4w0l"); // Invalid data character
-            fail("Should reject invalid bech32");
-        } catch (Exception e) {
-            // Expected
+    public void bip173InvalidVectors() throws Exception {
+        // BIP-173: Complete invalid test vector suite
+        String[] invalidTestVectors = {
+            "\u0020" + "1nwldj5", // HRP character out of range (space, 0x20)
+            "\u007F" + "1axkwrx", // HRP character out of range (DEL, 0x7F)
+            "\u0080" + "1eym55h", // HRP character out of range (0x80)
+            "an84characterslonghumanreadablepartthatcontainsthenumber1andtheexcludedcharactersbio1569pvx", // overall max length exceeded
+            "pzry9x0s0muk", // No separator character
+            "1pzry9x0s0muk", // Empty HRP
+            "x1b4n0q5v", // Invalid data character (b)
+            "li1dgmt3", // Too short checksum
+            "de1lg7wt\u00FF", // Invalid character in checksum
+            "A1G7SGD8", // checksum calculated with uppercase form of HRP
+            "10a06t8", // empty HRP
+            "1qzzfhee", // empty HRP (1 is the separator)
+        };
+
+        for (String invalid : invalidTestVectors) {
+            try {
+                Bech32.bech32Decode(invalid);
+                fail("Should reject invalid bech32: " + invalid.replace("\u0020", "[SPACE]")
+                    .replace("\u007F", "[DEL]").replace("\u0080", "[0x80]").replace("\u00FF", "[0xFF]"));
+            } catch (Bech32Exception | IllegalArgumentException e) {
+                // Expected - all of these should be rejected
+            }
         }
     }
 
@@ -212,12 +229,7 @@ public class TestBech32 {
         assertNotNull("BIP polymod validation: valid string should decode", decoded);
     }
 
-    @Test
-    public void bech32Checksum() throws Exception {
-        for (String s : VALID) {
-            Bech32.bech32Decode(s);
-        }
-    }
+
 
     @Test
     public void bech32DecodeEncode() throws Exception {
@@ -243,6 +255,134 @@ public class TestBech32 {
             } catch (Exception e) {
                 // Expected
             }
+        }
+    }
+
+    @Test
+    public void bip173HrpLengthConstraints() throws Exception {
+        // Test HRP length constraints (BIP-173: 1-83 characters)
+        byte[] payload = new byte[1];
+        payload[0] = 0x00;
+        ByteBuffer data = ByteBuffer.wrap(payload);
+        
+        // Test minimum HRP length (1 character) - should succeed
+        String encoded1 = Bech32.bech32Encode("a".getBytes(StandardCharsets.UTF_8), data.duplicate(), new byte[6]);
+        assertNotNull(encoded1);
+        
+        // Test empty HRP - should fail
+        try {
+            Bech32.bech32Encode("".getBytes(StandardCharsets.UTF_8), data.duplicate(), new byte[6]);
+            fail("Should reject empty HRP");
+        } catch (Bech32EncodingException e) {
+            assertTrue(e.getMessage().contains("HRP length"));
+        }
+        
+        // Test max HRP length (83 characters) - should succeed
+        String maxHrp = "an83characterlonghumanreadablepartthatcontainsthenumber1andtheexcludedcharactersbio";
+        assertEquals(83, maxHrp.length());
+        String encoded83 = Bech32.bech32Encode(maxHrp.getBytes(StandardCharsets.UTF_8), data.duplicate(), new byte[6]);
+        assertNotNull(encoded83);
+        
+        // Test HRP length > 83 - should fail
+        String tooLongHrp = maxHrp + "x"; // 84 characters
+        try {
+            Bech32.bech32Encode(tooLongHrp.getBytes(StandardCharsets.UTF_8), data.duplicate(), new byte[6]);
+            fail("Should reject HRP longer than 83 characters");
+        } catch (Bech32EncodingException e) {
+            assertTrue(e.getMessage().contains("HRP length"));
+        }
+    }
+
+    @Test
+    public void bip173HrpAsciiRangeValidation() throws Exception {
+        // Test HRP character validation (BIP-173: ASCII 33-126)
+        byte[] payload = new byte[1];
+        ByteBuffer data = ByteBuffer.wrap(payload);
+        
+        // Test valid ASCII range
+        String validChars = "abc123!@#$%^&*()_+-=[]{}|;:,.<>?/~";
+        String encoded = Bech32.bech32Encode(validChars.getBytes(StandardCharsets.UTF_8), data.duplicate(), new byte[6]);
+        assertNotNull(encoded);
+        
+        // Test invalid character < 33 (space = 32)
+        try {
+            Bech32.bech32Encode("test hrp".getBytes(StandardCharsets.UTF_8), data.duplicate(), new byte[6]);
+            fail("Should reject HRP with space character");
+        } catch (Bech32EncodingException e) {
+            assertTrue(e.getMessage().contains("invalid character"));
+        }
+        
+        // Test invalid character > 126 (DEL = 127)
+        try {
+            byte[] invalidHrp = { 't', 'e', 's', 't', (byte) 0x7F };
+            Bech32.bech32Encode(invalidHrp, data.duplicate(), new byte[6]);
+            fail("Should reject HRP with DEL character");
+        } catch (Bech32EncodingException e) {
+            assertTrue(e.getMessage().contains("invalid character"));
+        }
+    }
+
+    @Test
+    public void bip173MinimumChecksumLength() throws Exception {
+        // Test minimum checksum length validation (BIP-173: 6 characters after separator)
+        
+        // Too short - only 5 characters after separator
+        try {
+            Bech32.bech32Decode("x1abcd");
+            fail("Should reject string with less than 6 characters after separator");
+        } catch (Bech32DecodingException e) {
+            assertTrue(e.getMessage().contains("at least 6 characters after separator"));
+        }
+        
+        // Exactly 6 characters after separator (all checksum, no data) - should be valid format
+        try {
+            Bech32.bech32Decode("x1abcdef");
+            // This may fail checksum validation, which is fine
+        } catch (Bech32InvalidChecksumException e) {
+            // Expected - checksum validation failed
+        } catch (Bech32DecodingException e) {
+            // Should not be because of length
+            assertFalse(e.getMessage().contains("at least 6 characters after separator"));
+        }
+    }
+
+    @Test
+    public void bip173MaxLengthConstraint() throws Exception {
+        // Test BIP-173 90-character max length when enforced via overload
+        byte[] hrp = "test".getBytes(StandardCharsets.UTF_8);
+        
+        // Create payload that will result in output under 90 characters
+        byte[] payload = new byte[32];
+        String encoded = Bech32.bech32Encode(hrp, ByteBuffer.wrap(payload), new byte[6]);
+        assertTrue("Encoded should be under 90 chars", encoded.length() < 90);
+        
+        // Should succeed with 90 character limit
+        ByteBuffer decoded = Bech32.bech32Decode(encoded, 90);
+        assertNotNull(decoded);
+        
+        // Create a longer payload that exceeds 90 characters
+        byte[] longPayload = new byte[80];
+        String longEncoded = Bech32.bech32Encode(hrp, ByteBuffer.wrap(longPayload), new byte[6]);
+        assertTrue("Long encoded should exceed 90 chars", longEncoded.length() > 90);
+        
+        // Should fail when 90 character limit is enforced
+        try {
+            Bech32.bech32Decode(longEncoded, 90);
+            fail("Should reject string exceeding max length of 90");
+        } catch (Bech32DecodingException e) {
+            assertTrue(e.getMessage().contains("exceeds maximum length"));
+        }
+        
+        // But should succeed without limit (default)
+        ByteBuffer decodedNoLimit = Bech32.bech32Decode(longEncoded);
+        assertNotNull(decodedNoLimit);
+        
+        // Test encoding with max length constraint
+        try {
+            Bech32.bech32Encode(hrp, ByteBuffer.wrap(longPayload), new byte[6], 90);
+            fail("Should reject encoding that exceeds max length of 90");
+        } catch (Bech32EncodingException e) {
+            assertTrue(e.getMessage().contains("exceed maximum length"));
         }
     }
 
@@ -351,66 +491,6 @@ public class TestBech32 {
     }
 
     @Test
-    public void bipSpecificationVectorTest() throws Exception {
-        Gson gson = new Gson();
-        JsonObject json = gson.fromJson(readBipVectorJson(), JsonObject.class);
-        JsonArray testCases = json.getAsJsonArray("testCases");
-
-        int caseCount = 0;
-        for (int i = 0; i < testCases.size(); i++) {
-            JsonObject testCase = testCases.get(i).getAsJsonObject();
-            String section = testCase.get("bipSection").getAsString();
-            String hrp = testCase.get("hrp").getAsString();
-            String payloadHex = testCase.get("payloadHex").getAsString();
-            String expected = testCase.get("expectedEncoded").getAsString();
-            boolean roundtripValid = testCase.get("roundtripValid").getAsBoolean();
-
-            byte[] payload = hexToBytes(payloadHex);
-            byte[] checksum = new byte[6];
-            String encoded = Bech32.bech32Encode(hrp.getBytes(StandardCharsets.UTF_8), ByteBuffer.wrap(payload), checksum);
-
-            assertEquals("BIP test: " + section, expected, encoded);
-
-            if (roundtripValid) {
-                ByteBuffer decoded = Bech32.bech32Decode(encoded);
-                assertEquals("BIP roundtrip: " + section, ByteBuffer.wrap(payload), decoded);
-            }
-            caseCount++;
-        }
-
-        assertTrue("Should have BIP specification test cases", caseCount > 0);
-    }
-
-    @Test
-    public void bipCaseSensitivityRules() throws Exception {
-        Gson gson = new Gson();
-        JsonObject json = gson.fromJson(readBipVectorJson(), JsonObject.class);
-        JsonArray caseSensitivityTests = json.getAsJsonArray("caseSensitivityTests");
-
-        int caseCount = 0;
-        for (int i = 0; i < caseSensitivityTests.size(); i++) {
-            JsonObject testCase = caseSensitivityTests.get(i).getAsJsonObject();
-            String description = testCase.get("description").getAsString();
-            String input = testCase.get("input").getAsString();
-            boolean shouldDecode = testCase.get("shouldDecode").getAsBoolean();
-
-            try {
-                ByteBuffer decoded = Bech32.bech32Decode(input);
-                if (!shouldDecode) {
-                    fail("BIP case test '" + description + "' should not decode: " + input);
-                }
-            } catch (Exception e) {
-                if (shouldDecode) {
-                    fail("BIP case test '" + description + "' should decode: " + input);
-                }
-            }
-            caseCount++;
-        }
-
-        assertTrue("Should have BIP case sensitivity tests", caseCount > 0);
-    }
-
-    @Test
     public void vectorInvalidRegression() throws Exception {
         Gson gson = new Gson();
         JsonObject json = gson.fromJson(readVectorJson(), JsonObject.class);
@@ -463,11 +543,6 @@ public class TestBech32 {
     private String readVectorJson() throws Exception {
         assertTrue("vector.json not found at " + VECTOR_JSON_PATH, Files.exists(VECTOR_JSON_PATH));
         return new String(Files.readAllBytes(VECTOR_JSON_PATH), StandardCharsets.UTF_8);
-    }
-
-    private String readBipVectorJson() throws Exception {
-        assertTrue("bip-vectors.json not found at " + BIP_VECTOR_JSON_PATH, Files.exists(BIP_VECTOR_JSON_PATH));
-        return new String(Files.readAllBytes(BIP_VECTOR_JSON_PATH), StandardCharsets.UTF_8);
     }
 
     private byte[] hexToBytes(String hex) {

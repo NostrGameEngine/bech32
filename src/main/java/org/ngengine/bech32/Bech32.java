@@ -43,6 +43,9 @@ public class Bech32 {
     private static final byte[] CHARSET_REV = new byte[128];
     private static final int[] GENERATORS = { 0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3 };
     private static final char BECH32_SEPARATOR = '1';
+    private static final int BECH32_CHECKSUM_LENGTH = 6;
+    private static final int BECH32_MIN_HRP_LENGTH = 1;
+    private static final int BECH32_MAX_HRP_LENGTH = 83;
 
     static {
         // Initialize reverse charset lookup table with -1 (invalid)
@@ -71,7 +74,21 @@ public class Bech32 {
     @Nonnull
     public static String bech32Encode(@Nonnull byte[] hrp, @Nonnull ByteBuffer data) throws Bech32EncodingException {
         byte[] chk = new byte[6];
-        return bech32Encode(hrp, data, chk);
+        return bech32Encode(hrp, data, chk, -1);
+    }
+
+    /**
+     * Encode some arbitrary data into a Bech32 string with custom max length.
+     * @param hrp the human readable part (the prefix), must be utf-8 encoded
+     * @param data a ByteBuffer containing the data to encode, must have limit set to the length of the data to encode
+     * @param maxLength maximum allowed length for the encoded string (use -1 for no limit)
+     * @return the Bech32 encoded string
+     * @throws Bech32EncodingException
+     */
+    @Nonnull
+    public static String bech32Encode(@Nonnull byte[] hrp, @Nonnull ByteBuffer data, int maxLength) throws Bech32EncodingException {
+        byte[] chk = new byte[6];
+        return bech32Encode(hrp, data, chk, maxLength);
     }
 
     /**
@@ -85,9 +102,30 @@ public class Bech32 {
     @Nonnull
     public static String bech32Encode(@Nonnull byte[] hrp, @Nonnull ByteBuffer data, @Nonnull byte[] chkOut)
         throws Bech32EncodingException {
+        return bech32Encode(hrp, data, chkOut, -1);
+    }
+
+    /**
+     * Encode some arbitrary data into a Bech32 string with custom max length.
+     * @param hrp the human readable part (the prefix), must be utf-8 encoded
+     * @param data a ByteBuffer containing the data to encode, must have limit set to the length of the data to encode
+     * @param chkOut a byte array of length 6 that will be filled with the checksum
+     * @param maxLength maximum allowed length for the encoded string (use -1 for no limit)
+     * @return the Bech32 encoded string
+     * @throws Bech32EncodingException
+     */
+    @Nonnull
+    public static String bech32Encode(@Nonnull byte[] hrp, @Nonnull ByteBuffer data, @Nonnull byte[] chkOut, int maxLength)
+        throws Bech32EncodingException {
         if (chkOut == null || chkOut.length < 6) {
             throw new Bech32EncodingException("invalid checksum buffer");
         }
+
+        // validate HRP length
+        if (hrp.length < BECH32_MIN_HRP_LENGTH || hrp.length > BECH32_MAX_HRP_LENGTH) {
+            throw new Bech32EncodingException("HRP length must be between " + BECH32_MIN_HRP_LENGTH + " and " + BECH32_MAX_HRP_LENGTH + " characters");
+        }
+
         ByteBuffer src = data.slice();
         int dataLen = src.remaining();
 
@@ -95,15 +133,23 @@ public class Bech32 {
         int data5Len = (dataLen * 8 + 4) / 5;
         int outputSize = hrp.length + 1 + data5Len + 6;
 
+        // validate max length constraint (BIP-173)
+        if (maxLength > 0 && outputSize > maxLength) {
+            throw new Bech32EncodingException("encoded string would exceed maximum length of " + maxLength);
+        }
+
         char[] output = new char[outputSize];
         int outPos = 0;
 
-        // write HRP in lowercase
+        // write HRP in lowercase and validate characters
         byte[] hrpLower = new byte[hrp.length];
         for (int i = 0; i < hrp.length; i++) {
             byte b = hrp[i];
             if (b >= 0x41 && b <= 0x5a) {
                 b += 32;
+            }
+            if (b < 0x21 || b > 0x7e) {
+                throw new Bech32EncodingException("HRP contains invalid character (must be ASCII 33-126)");
             }
             hrpLower[i] = b;
             output[outPos++] = (char) b;
@@ -135,7 +181,7 @@ public class Bech32 {
         for (int i = 0; i < dataLen; i++) {
             int value = src.get(i) & 0xFF;
             if ((value >> 8) != 0) {
-                throw new IllegalArgumentException("input value is outside of range");
+                throw new Bech32EncodingException("input value is outside of range");
             }
             acc = (acc << 8) | value;
             bits += 8;
@@ -183,6 +229,26 @@ public class Bech32 {
     @Nonnull
     public static ByteBuffer bech32Decode(@Nonnull String bech)
         throws Bech32DecodingException, Bech32InvalidChecksumException, Bech32InvalidRangeException {
+        return bech32Decode(bech, -1);
+    }
+
+    /**
+     * Decode a Bech32 string into a ByteBuffer with custom max length.
+     * @param bech the Bech32 encoded string, must be lower case
+     * @param maxLength maximum allowed length for the encoded string (use -1 for no limit)
+     * @return a ByteBuffer containing the decoded data, the position will be set to 0 and the limit to the length of the data
+     * @throws Bech32DecodingException
+     * @throws Bech32InvalidChecksumException
+     * @throws Bech32InvalidRangeException
+     */
+    @Nonnull
+    public static ByteBuffer bech32Decode(@Nonnull String bech, int maxLength)
+        throws Bech32DecodingException, Bech32InvalidChecksumException, Bech32InvalidRangeException {
+        // validate max length constraint
+        if (maxLength > 0 && bech.length() > maxLength) {
+            throw new Bech32DecodingException("string exceeds maximum length of " + maxLength);
+        }
+
         byte[] bytes = getLowerCaseBytes(bech);
 
         int hrpLength = 0;
@@ -196,7 +262,18 @@ public class Bech32 {
         }
 
         if (hrpLength == 0 || hrpLength == bytes.length) {
-            throw new Bech32DecodingException("invalid bech32 string");
+            throw new Bech32DecodingException("invalid bech32 string: no separator found");
+        }
+
+        // validate HRP length
+        if (hrpLength < BECH32_MIN_HRP_LENGTH || hrpLength > BECH32_MAX_HRP_LENGTH) {
+            throw new Bech32DecodingException("HRP length must be between " + BECH32_MIN_HRP_LENGTH + " and " + BECH32_MAX_HRP_LENGTH + " characters");
+        }
+
+        // validate minimum checksum length
+        // must have at least 6 characters after separator for checksum
+        if (bytes.length - (hrpLength + 1) < BECH32_CHECKSUM_LENGTH) {
+            throw new Bech32DecodingException("string too short: must have at least " + BECH32_CHECKSUM_LENGTH + " characters after separator for checksum");
         }
 
         // decode using O(1) reverse charset lookup
@@ -243,7 +320,7 @@ public class Bech32 {
 
         // check remaining bits (should be < 5 and padding should be 0)
         if (bits >= 5 || (((acc << (8 - bits)) & 0xff) != 0)) {
-            throw new IllegalArgumentException("could not convert bits");
+            throw new Bech32DecodingException("could not convert bits");
         }
 
         return ByteBuffer.wrap(output, 0, outPos).slice();
