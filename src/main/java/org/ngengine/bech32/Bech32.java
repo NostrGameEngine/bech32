@@ -41,9 +41,21 @@ import java.nio.charset.StandardCharsets;
 public class Bech32 {
 
     private static final String CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
+    private static final byte[] CHARSET_REV = new byte[128];
     private static final byte[] ZEROES = new byte[] { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
     private static final int[] GENERATORS = { 0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3 };
     private static final char BECH32_SEPARATOR = '1';
+
+    static {
+        // Initialize reverse charset lookup table with -1 (invalid)
+        for (int i = 0; i < CHARSET_REV.length; i++) {
+            CHARSET_REV[i] = -1;
+        }
+        // Populate with valid character mappings
+        for (int i = 0; i < CHARSET.length(); i++) {
+            CHARSET_REV[CHARSET.charAt(i)] = (byte) i;
+        }
+    }
 
     /**
      * Encode some arbitrary data into a Bech32 string.
@@ -138,11 +150,17 @@ public class Bech32 {
             throw new Bech32DecodingException("invalid bech32 string");
         }
 
-        // decode
+        // decode using O(1) reverse charset lookup
         for (int i = hrpLength + 1; i < bytes.length; i++) {
-            int v = CHARSET.indexOf(bytes[i]);
-            if (v == -1) throw new Bech32DecodingException("invalid bech32 character " + bytes[i]);
-            bytes[i] = (byte) v;
+            byte c = bytes[i];
+            if (c >= 128) {
+                throw new Bech32DecodingException("invalid bech32 character");
+            }
+            byte v = CHARSET_REV[c];
+            if (v < 0) {
+                throw new Bech32DecodingException("invalid bech32 character " + (char) c);
+            }
+            bytes[i] = v;
         }
 
         // verify
