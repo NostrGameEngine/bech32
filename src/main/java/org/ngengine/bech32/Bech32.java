@@ -33,7 +33,6 @@ package org.ngengine.bech32;
 import jakarta.annotation.Nonnull;
 import jakarta.annotation.Nullable;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 
 /**
  * Fast, low memory, thread safe and gc friendly Bech32 encoder/decoder.
@@ -42,7 +41,6 @@ public class Bech32 {
 
     private static final String CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
     private static final byte[] CHARSET_REV = new byte[128];
-    private static final byte[] ZEROES = new byte[] { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
     private static final int[] GENERATORS = { 0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3 };
     private static final char BECH32_SEPARATOR = '1';
 
@@ -90,37 +88,88 @@ public class Bech32 {
         if (chkOut == null || chkOut.length < 6) {
             throw new Bech32EncodingException("invalid checksum buffer");
         }
+        ByteBuffer src = data.slice();
+        int dataLen = src.remaining();
+        
+        // Calculate exact output size: HRP + '1' + (data8 * 8 + 4) / 5 + 6
+        int data5Len = (dataLen * 8 + 4) / 5;
+        int outputSize = hrp.length + 1 + data5Len + 6;
+        
+        char[] output = new char[outputSize];
+        int outPos = 0;
 
-        data = convertBits(data, 0, 8, 5, true);
-
-        if (data.position() != 0) throw new Bech32EncodingException("expected data buffer to be at position 0");
-
-        int xlatLength = 6 + data.limit();
-
-        int i = 0;
-
-        byte[] ret = new byte[hrp.length + xlatLength + 1];
-        for (int j = 0; j < hrp.length; j++) {
-            byte b = hrp[j];
+        // write HRP in lowercase
+        byte[] hrpLower = new byte[hrp.length];
+        for (int i = 0; i < hrp.length; i++) {
+            byte b = hrp[i];
             if (b >= 0x41 && b <= 0x5a) {
                 b += 32;
             }
-            ret[i++] = b;
+            hrpLower[i] = b;
+            output[outPos++] = (char) b;
         }
 
-        createChecksum(ret, hrp.length, data, chkOut);
+        // write separator
+        output[outPos++] = BECH32_SEPARATOR;
 
-        ret[i++] = BECH32_SEPARATOR;
-
-        for (int j = 0; j < data.limit(); j++) {
-            ret[i++] = (byte) CHARSET.charAt(data.get(j));
+        // initialize checksum
+        int chk = 1;
+        
+        // process HRP
+        for (int i = 0; i < hrpLower.length; i++) {
+            byte b = hrpLower[i];
+            b = (byte) (b >> 5);
+            chk = polymod(b, chk);
+        }
+        chk = polymod((byte) 0x00, chk);
+        
+        for (int i = 0; i < hrpLower.length; i++) {
+            byte b = (byte) (hrpLower[i] & 0x1f);
+            chk = polymod(b, chk);
         }
 
-        for (int j = 0; j < 6; j++) {
-            ret[i++] = (byte) CHARSET.charAt(chkOut[j]);
+        // convert 8 to 5 bits and compute checksum on the fly
+        int acc = 0;
+        int bits = 0;
+
+        for (int i = 0; i < dataLen; i++) {
+            int value = src.get(i) & 0xFF;
+            if ((value >> 8) != 0) {
+                throw new IllegalArgumentException("input value is outside of range");
+            }
+            acc = (acc << 8) | value;
+            bits += 8;
+
+            // emit 5-bit groups as we accumulate them
+            while (bits >= 5) {
+                bits -= 5;
+                int v5 = (acc >> bits) & 0x1f;
+                output[outPos++] = CHARSET.charAt(v5);
+                chk = polymod((byte) v5, chk);
+            }
         }
 
-        return new String(ret, StandardCharsets.UTF_8);
+        // padding
+        if (bits > 0) {
+            int v5 = (acc << (5 - bits)) & 0x1f;
+            output[outPos++] = CHARSET.charAt(v5);
+            chk = polymod((byte) v5, chk);
+        }
+
+        // apply polymod to checksum padding (always 6 zero bits)
+        for (int i = 0; i < 6; i++) {
+            chk = polymod((byte) 0, chk);
+        }
+
+        // compute final checksum
+        chk ^= 1;
+        for (int i = 0; i < 6; i++) {
+            byte checksumByte = (byte) ((chk >> (5 * (5 - i))) & 0x1f);
+            chkOut[i] = checksumByte;
+            output[outPos++] = CHARSET.charAt(checksumByte);
+        }
+
+        return new String(output);
     }
 
     /**
@@ -163,14 +212,41 @@ public class Bech32 {
             bytes[i] = v;
         }
 
-        // verify
+        // verify checksum
         if (!verifyChecksum(bytes, hrpLength, hrpLength + 1)) {
             throw new Bech32InvalidChecksumException("invalid bech32 checksum");
         }
 
-        ByteBuffer out = ByteBuffer.wrap(bytes, hrpLength + 1, bytes.length - (hrpLength + 1) - 6);
-        out = convertBits(out, hrpLength + 1, 5, 8, false);
-        return out.slice();
+        // extract data portion (5-bit values, excluding HRP and checksum)
+        int dataStart = hrpLength + 1;
+        int dataLen = bytes.length - dataStart - 6; // -6 for checksum
+        
+        // pre-calculate output size
+        int outCapacity = (dataLen * 5) / 8;
+        byte[] output = new byte[outCapacity];
+        int outPos = 0;
+
+        // 5 to 8 bit conversion
+        int acc = 0;
+        int bits = 0;
+        for (int i = 0; i < dataLen; i++) {
+            int value = bytes[dataStart + i];
+            acc = (acc << 5) | value;
+            bits += 5;
+            
+            while (bits >= 8) {
+                bits -= 8;
+                int byte8 = (acc >> bits) & 0xff;
+                output[outPos++] = (byte) byte8;
+            }
+        }
+
+        // check remaining bits (should be < 5 and padding should be 0)
+        if (bits >= 5 || (((acc << (8 - bits)) & 0xff) != 0)) {
+            throw new IllegalArgumentException("could not convert bits");
+        }
+
+        return ByteBuffer.wrap(output, 0, outPos).slice();
     }
 
     private static int polymod(
@@ -224,13 +300,6 @@ public class Bech32 {
         return (1 == p);
     }
 
-    private static void createChecksum(@Nonnull byte[] hrp, int hrpLength, @Nonnull ByteBuffer data, @Nonnull byte[] ret) {
-        int polymod = polymod(hrp, hrpLength, data, ZEROES, 0) ^ 1;
-        for (int i = 0; i < 6; i++) {
-            ret[i] = (byte) ((polymod >> 5 * (5 - i)) & 0x1f);
-        }
-    }
-
     private static int polymod(byte b, int chk) {
         byte top = (byte) (chk >> 0x19);
         chk = b ^ ((chk & 0x1ffffff) << 5);
@@ -241,15 +310,28 @@ public class Bech32 {
     }
 
     @Nonnull
-    private static byte[] getLowerCaseBytes(@Nonnull String bech) throws Bech32InvalidRangeException {
+    private static byte[] getLowerCaseBytes(@Nonnull String bech) throws Bech32InvalidRangeException, Bech32DecodingException {
         int length = bech.length();
         byte[] result = new byte[length];
+        byte caseState = 0; // 0=undefined, 1=lowercase, 2=uppercase
+
         for (int i = 0; i < length; i++) {
             char c = bech.charAt(i);
-            // Convert uppercase to lowercase (only for ASCII A-Z)
+
+            // Convert uppercase to lowercase and reject mixed case
             if (c >= 'A' && c <= 'Z') {
-                c += 32; // 'A'-'a'
+                if (caseState == 1) {
+                    throw new Bech32DecodingException("mixed case strings are not allowed");
+                }
+                caseState = 2;
+                c += 32; // Convert to lowercase
+            } else if (c >= 'a' && c <= 'z') {
+                if (caseState == 2) {
+                    throw new Bech32DecodingException("mixed case strings are not allowed");
+                }
+                caseState = 1;
             }
+
             if (c < 0x21 || c > 0x7e) {
                 throw new Bech32InvalidRangeException("bech32 characters  out of range");
             }
@@ -258,41 +340,4 @@ public class Bech32 {
         return result;
     }
 
-    @Nonnull
-    private static ByteBuffer convertBits(@Nonnull ByteBuffer in, int skip, int fromBits, int toBits, boolean pad) {
-        ByteBuffer src = in.slice();
-        
-        int outCapacity = (src.remaining() * fromBits + toBits - 1) / toBits;
-        ByteBuffer output = ByteBuffer.allocate(outCapacity);
-
-        int acc = 0;
-        int bits = 0;
-        final int maxv = (1 << toBits) - 1;
-
-        for (int i = 0; i < src.remaining(); i++) {
-            int value = src.get(i) & 0xFF;
-            if ((value >> fromBits) != 0) {
-                throw new IllegalArgumentException("input value is outside of range");
-            }
-            acc = (acc << fromBits) | value;
-            bits += fromBits;
-            while (bits >= toBits) {
-                bits -= toBits;
-                int word = (acc >> bits) & maxv;
-                output.put((byte) word);
-            }
-        }
-
-        if (pad) {
-            if (bits > 0) {
-                int word = (acc << (toBits - bits)) & maxv;
-                output.put((byte) word);
-            }
-        } else if (bits >= fromBits || (((acc << (toBits - bits)) & maxv) != 0)) {
-            throw new IllegalArgumentException("could not convert bits");
-        }
-
-        output.flip();
-        return output;
-    }
 }
