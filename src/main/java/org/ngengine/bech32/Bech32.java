@@ -86,7 +86,8 @@ public class Bech32 {
      * @throws Bech32EncodingException
      */
     @Nonnull
-    public static String bech32Encode(@Nonnull byte[] hrp, @Nonnull ByteBuffer data, int maxLength) throws Bech32EncodingException {
+    public static String bech32Encode(@Nonnull byte[] hrp, @Nonnull ByteBuffer data, int maxLength)
+        throws Bech32EncodingException {
         byte[] chk = new byte[6];
         return bech32Encode(hrp, data, chk, maxLength);
     }
@@ -123,7 +124,9 @@ public class Bech32 {
 
         // validate HRP length
         if (hrp.length < BECH32_MIN_HRP_LENGTH || hrp.length > BECH32_MAX_HRP_LENGTH) {
-            throw new Bech32EncodingException("HRP length must be between " + BECH32_MIN_HRP_LENGTH + " and " + BECH32_MAX_HRP_LENGTH + " characters");
+            throw new Bech32EncodingException(
+                "HRP length must be between " + BECH32_MIN_HRP_LENGTH + " and " + BECH32_MAX_HRP_LENGTH + " characters"
+            );
         }
 
         ByteBuffer src = data.slice();
@@ -267,13 +270,17 @@ public class Bech32 {
 
         // validate HRP length
         if (hrpLength < BECH32_MIN_HRP_LENGTH || hrpLength > BECH32_MAX_HRP_LENGTH) {
-            throw new Bech32DecodingException("HRP length must be between " + BECH32_MIN_HRP_LENGTH + " and " + BECH32_MAX_HRP_LENGTH + " characters");
+            throw new Bech32DecodingException(
+                "HRP length must be between " + BECH32_MIN_HRP_LENGTH + " and " + BECH32_MAX_HRP_LENGTH + " characters"
+            );
         }
 
         // validate minimum checksum length
         // must have at least 6 characters after separator for checksum
         if (bytes.length - (hrpLength + 1) < BECH32_CHECKSUM_LENGTH) {
-            throw new Bech32DecodingException("string too short: must have at least " + BECH32_CHECKSUM_LENGTH + " characters after separator for checksum");
+            throw new Bech32DecodingException(
+                "string too short: must have at least " + BECH32_CHECKSUM_LENGTH + " characters after separator for checksum"
+            );
         }
 
         // decode using O(1) reverse charset lookup

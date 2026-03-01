@@ -199,8 +199,14 @@ public class TestBech32 {
         for (String invalid : invalidTestVectors) {
             try {
                 Bech32.bech32Decode(invalid);
-                fail("Should reject invalid bech32: " + invalid.replace("\u0020", "[SPACE]")
-                    .replace("\u007F", "[DEL]").replace("\u0080", "[0x80]").replace("\u00FF", "[0xFF]"));
+                fail(
+                    "Should reject invalid bech32: " +
+                    invalid
+                        .replace("\u0020", "[SPACE]")
+                        .replace("\u007F", "[DEL]")
+                        .replace("\u0080", "[0x80]")
+                        .replace("\u00FF", "[0xFF]")
+                );
             } catch (Bech32Exception | IllegalArgumentException e) {
                 // Expected - all of these should be rejected
             }
@@ -228,8 +234,6 @@ public class TestBech32 {
         ByteBuffer decoded = Bech32.bech32Decode(validBech);
         assertNotNull("BIP polymod validation: valid string should decode", decoded);
     }
-
-
 
     @Test
     public void bech32DecodeEncode() throws Exception {
@@ -264,11 +268,11 @@ public class TestBech32 {
         byte[] payload = new byte[1];
         payload[0] = 0x00;
         ByteBuffer data = ByteBuffer.wrap(payload);
-        
+
         // Test minimum HRP length (1 character) - should succeed
         String encoded1 = Bech32.bech32Encode("a".getBytes(StandardCharsets.UTF_8), data.duplicate(), new byte[6]);
         assertNotNull(encoded1);
-        
+
         // Test empty HRP - should fail
         try {
             Bech32.bech32Encode("".getBytes(StandardCharsets.UTF_8), data.duplicate(), new byte[6]);
@@ -276,13 +280,13 @@ public class TestBech32 {
         } catch (Bech32EncodingException e) {
             assertTrue(e.getMessage().contains("HRP length"));
         }
-        
+
         // Test max HRP length (83 characters) - should succeed
         String maxHrp = "an83characterlonghumanreadablepartthatcontainsthenumber1andtheexcludedcharactersbio";
         assertEquals(83, maxHrp.length());
         String encoded83 = Bech32.bech32Encode(maxHrp.getBytes(StandardCharsets.UTF_8), data.duplicate(), new byte[6]);
         assertNotNull(encoded83);
-        
+
         // Test HRP length > 83 - should fail
         String tooLongHrp = maxHrp + "x"; // 84 characters
         try {
@@ -298,12 +302,12 @@ public class TestBech32 {
         // Test HRP character validation (BIP-173: ASCII 33-126)
         byte[] payload = new byte[1];
         ByteBuffer data = ByteBuffer.wrap(payload);
-        
+
         // Test valid ASCII range
         String validChars = "abc123!@#$%^&*()_+-=[]{}|;:,.<>?/~";
         String encoded = Bech32.bech32Encode(validChars.getBytes(StandardCharsets.UTF_8), data.duplicate(), new byte[6]);
         assertNotNull(encoded);
-        
+
         // Test invalid character < 33 (space = 32)
         try {
             Bech32.bech32Encode("test hrp".getBytes(StandardCharsets.UTF_8), data.duplicate(), new byte[6]);
@@ -311,7 +315,7 @@ public class TestBech32 {
         } catch (Bech32EncodingException e) {
             assertTrue(e.getMessage().contains("invalid character"));
         }
-        
+
         // Test invalid character > 126 (DEL = 127)
         try {
             byte[] invalidHrp = { 't', 'e', 's', 't', (byte) 0x7F };
@@ -325,7 +329,7 @@ public class TestBech32 {
     @Test
     public void bip173MinimumChecksumLength() throws Exception {
         // Test minimum checksum length validation (BIP-173: 6 characters after separator)
-        
+
         // Too short - only 5 characters after separator
         try {
             Bech32.bech32Decode("x1abcd");
@@ -333,7 +337,7 @@ public class TestBech32 {
         } catch (Bech32DecodingException e) {
             assertTrue(e.getMessage().contains("at least 6 characters after separator"));
         }
-        
+
         // Exactly 6 characters after separator (all checksum, no data) - should be valid format
         try {
             Bech32.bech32Decode("x1abcdef");
@@ -350,21 +354,21 @@ public class TestBech32 {
     public void bip173MaxLengthConstraint() throws Exception {
         // Test BIP-173 90-character max length when enforced via overload
         byte[] hrp = "test".getBytes(StandardCharsets.UTF_8);
-        
+
         // Create payload that will result in output under 90 characters
         byte[] payload = new byte[32];
         String encoded = Bech32.bech32Encode(hrp, ByteBuffer.wrap(payload), new byte[6]);
         assertTrue("Encoded should be under 90 chars", encoded.length() < 90);
-        
+
         // Should succeed with 90 character limit
         ByteBuffer decoded = Bech32.bech32Decode(encoded, 90);
         assertNotNull(decoded);
-        
+
         // Create a longer payload that exceeds 90 characters
         byte[] longPayload = new byte[80];
         String longEncoded = Bech32.bech32Encode(hrp, ByteBuffer.wrap(longPayload), new byte[6]);
         assertTrue("Long encoded should exceed 90 chars", longEncoded.length() > 90);
-        
+
         // Should fail when 90 character limit is enforced
         try {
             Bech32.bech32Decode(longEncoded, 90);
@@ -372,11 +376,11 @@ public class TestBech32 {
         } catch (Bech32DecodingException e) {
             assertTrue(e.getMessage().contains("exceeds maximum length"));
         }
-        
+
         // But should succeed without limit (default)
         ByteBuffer decodedNoLimit = Bech32.bech32Decode(longEncoded);
         assertNotNull(decodedNoLimit);
-        
+
         // Test encoding with max length constraint
         try {
             Bech32.bech32Encode(hrp, ByteBuffer.wrap(longPayload), new byte[6], 90);
