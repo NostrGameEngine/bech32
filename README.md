@@ -1,6 +1,6 @@
 # Bech32 for Java
 
-A pure java implementation of the Bech32 encoding, that is heavily optimized to reduce memory copying and allocations.
+A pure java implementation of the Bech32 and Bech32m encoders and decoders, that is heavily optimized to reduce memory copying and allocations.
 
 
 The library is released to maven central: [org.ngengine/bech32](https://central.sonatype.com/artifact/org.ngengine/bech32)
