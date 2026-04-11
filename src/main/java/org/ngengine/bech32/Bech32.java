@@ -339,7 +339,12 @@ public class Bech32 {
     @Nonnull
     public static ByteBuffer bech32Decode(@Nonnull String bech, @Nonnull DataFormat outputFormat)
         throws Bech32DecodingException, Bech32InvalidChecksumException, Bech32InvalidRangeException {
-        return bech32Decode(bech, -1, new Bech32ChecksumVariant().requireVariant(Bech32ChecksumVariant.BECH32_CONST), outputFormat);
+        return bech32Decode(
+            bech,
+            -1,
+            new Bech32ChecksumVariant().requireVariant(Bech32ChecksumVariant.BECH32_CONST),
+            outputFormat
+        );
     }
 
     /**
@@ -360,7 +365,12 @@ public class Bech32 {
     @Nonnull
     public static ByteBuffer bech32Decode(@Nonnull String bech, int maxLength, @Nonnull DataFormat outputFormat)
         throws Bech32DecodingException, Bech32InvalidChecksumException, Bech32InvalidRangeException {
-        return bech32Decode(bech, maxLength, new Bech32ChecksumVariant().requireVariant(Bech32ChecksumVariant.BECH32_CONST), outputFormat);
+        return bech32Decode(
+            bech,
+            maxLength,
+            new Bech32ChecksumVariant().requireVariant(Bech32ChecksumVariant.BECH32_CONST),
+            outputFormat
+        );
     }
 
     @Nonnull

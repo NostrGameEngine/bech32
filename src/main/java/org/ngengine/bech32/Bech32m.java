@@ -107,7 +107,12 @@ public final class Bech32m {
     @Nonnull
     public static ByteBuffer bech32mDecode(@Nonnull String bech, @Nonnull DataFormat outputFormat)
         throws Bech32DecodingException, Bech32InvalidChecksumException, Bech32InvalidRangeException {
-        return Bech32.bech32Decode(bech, -1, new Bech32ChecksumVariant().requireVariant(Bech32ChecksumVariant.BECH32M_CONST), outputFormat);
+        return Bech32.bech32Decode(
+            bech,
+            -1,
+            new Bech32ChecksumVariant().requireVariant(Bech32ChecksumVariant.BECH32M_CONST),
+            outputFormat
+        );
     }
 
     /**
