@@ -58,6 +58,33 @@ public class TestBech32 {
 
     private static final String[] INVALID = { "npub1wpuq4mcuDFxhnrqk85hk29qjz6u93vpzxqy9qpuugpyc302fepkqg8t3a4" };
 
+    private static final String[] VALID_BECH32M = {
+        "A1LQFN3A",
+        "a1lqfn3a",
+        "an83characterlonghumanreadablepartthatcontainsthetheexcludedcharactersbioandnumber11sg7hg6",
+        "abcdef1l7aum6echk45nj3s0wdvt2fg8x9yrzpqzd3ryx",
+        "11llllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllludsr8",
+        "split1checkupstagehandshakeupstreamerranterredcaperredlc445v",
+        "?1v759aa",
+    };
+
+    private static final String[] INVALID_BECH32M = {
+        "\u00201xj0phk",
+        "\u007F1g6xzxy",
+        "\u00801vctc34",
+        "an84characterslonghumanreadablepartthatcontainsthetheexcludedcharactersbioandnumber11d6pts4",
+        "qyrz8wqd2c9m",
+        "1qyrz8wqd2c9m",
+        "y1b0jsk6g",
+        "lt1igcx5c0",
+        "in1muywd",
+        "mm1crxm3i",
+        "au1s5cgom",
+        "M1VUXWEZ",
+        "16plkw9",
+        "1p2gdwpf",
+    };
+
     private static final Path VECTOR_JSON_PATH = Paths.get("src", "test", "resources", "vector.json");
 
     @Test
@@ -542,6 +569,48 @@ public class TestBech32 {
         }
 
         assertTrue("expected invalid vectors in vector.json", count > 0);
+    }
+
+    @Test
+    public void decodeExposesChecksumVariant() throws Exception {
+        ChecksumVariant variant = new ChecksumVariant();
+        Bech32.bech32Decode("A12UEL5L", variant);
+        assertEquals(ChecksumVariant.BECH32_CONST, variant.getVariant());
+    }
+
+    @Test
+    public void bip350ValidBech32mVectors() throws Exception {
+        for (String s : VALID_BECH32M) {
+            try {
+                ByteBuffer decoded = Bech32m.bech32mDecode(s);
+                assertNotNull("Expected valid Bech32m vector to decode: " + s, decoded);
+            } catch (Bech32InvalidChecksumException e) {
+                fail("Checksum failed for official valid Bech32m vector: " + s);
+            } catch (Bech32DecodingException e) {
+                // Official vectors validate checksum/charset/HRP rules; this byte-oriented API
+                // additionally enforces strict 5->8 conversion with zero padding.
+                assertTrue("Unexpected Bech32m decode error for vector: " + s, e.getMessage().contains("convert bits"));
+            }
+
+            try {
+                Bech32.bech32Decode(s);
+                fail("Bech32 decoder must reject valid Bech32m vector: " + s);
+            } catch (Bech32InvalidChecksumException e) {
+                // Expected: no string can be valid both Bech32 and Bech32m.
+            }
+        }
+    }
+
+    @Test
+    public void bip350InvalidBech32mVectors() throws Exception {
+        for (String s : INVALID_BECH32M) {
+            try {
+                Bech32m.bech32mDecode(s);
+                fail("Expected invalid Bech32m vector to fail: " + s);
+            } catch (Bech32Exception | IllegalArgumentException e) {
+                // Expected.
+            }
+        }
     }
 
     private String readVectorJson() throws Exception {

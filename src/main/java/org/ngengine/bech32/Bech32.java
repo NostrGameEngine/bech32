@@ -118,6 +118,17 @@ public class Bech32 {
     @Nonnull
     public static String bech32Encode(@Nonnull byte[] hrp, @Nonnull ByteBuffer data, @Nonnull byte[] chkOut, int maxLength)
         throws Bech32EncodingException {
+        return bech32Encode(ChecksumVariant.BECH32_CONST, hrp, data, chkOut, maxLength);
+    }
+
+    @Nonnull
+    static String bech32Encode(
+        int checksumConstant,
+        @Nonnull byte[] hrp,
+        @Nonnull ByteBuffer data,
+        @Nonnull byte[] chkOut,
+        int maxLength
+    ) throws Bech32EncodingException {
         if (chkOut == null || chkOut.length < 6) {
             throw new Bech32EncodingException("invalid checksum buffer");
         }
@@ -211,7 +222,7 @@ public class Bech32 {
         }
 
         // compute final checksum
-        chk ^= 1;
+        chk ^= checksumConstant;
         for (int i = 0; i < 6; i++) {
             byte checksumByte = (byte) ((chk >> (5 * (5 - i))) & 0x1f);
             chkOut[i] = checksumByte;
@@ -232,7 +243,7 @@ public class Bech32 {
     @Nonnull
     public static ByteBuffer bech32Decode(@Nonnull String bech)
         throws Bech32DecodingException, Bech32InvalidChecksumException, Bech32InvalidRangeException {
-        return bech32Decode(bech, -1);
+        return bech32Decode(bech, -1, new ChecksumVariant().requireVariant(ChecksumVariant.BECH32_CONST));
     }
 
     /**
@@ -247,7 +258,18 @@ public class Bech32 {
     @Nonnull
     public static ByteBuffer bech32Decode(@Nonnull String bech, int maxLength)
         throws Bech32DecodingException, Bech32InvalidChecksumException, Bech32InvalidRangeException {
-        // validate max length constraint
+        return bech32Decode(bech, maxLength, new ChecksumVariant().requireVariant(ChecksumVariant.BECH32_CONST));
+    }
+
+    @Nonnull
+    public static ByteBuffer bech32Decode(@Nonnull String bech, @Nonnull ChecksumVariant checksumVariant)
+        throws Bech32DecodingException, Bech32InvalidChecksumException, Bech32InvalidRangeException {
+        return bech32Decode(bech, -1, checksumVariant);
+    }
+
+    @Nonnull
+    public static ByteBuffer bech32Decode(@Nonnull String bech, int maxLength, @Nonnull ChecksumVariant checksumVariant)
+        throws Bech32DecodingException, Bech32InvalidChecksumException, Bech32InvalidRangeException {
         if (maxLength > 0 && bech.length() > maxLength) {
             throw new Bech32DecodingException("string exceeds maximum length of " + maxLength);
         }
@@ -296,14 +318,20 @@ public class Bech32 {
             bytes[i] = v;
         }
 
-        // verify checksum
-        if (!verifyChecksum(bytes, hrpLength, hrpLength + 1)) {
+        int variant = verifyChecksumAndDetectPolymodVariant(bytes, hrpLength, hrpLength + 1);
+        if (variant == 0) {
             throw new Bech32InvalidChecksumException("invalid bech32 checksum");
+        }
+        if (checksumVariant != null) {
+            checksumVariant.setVariant(variant);
+            if (checksumVariant.getRequiredVariant() != 0 && checksumVariant.getRequiredVariant() != variant) {
+                throw new Bech32InvalidChecksumException("invalid checksum variant");
+            }
         }
 
         // extract data portion (5-bit values, excluding HRP and checksum)
         int dataStart = hrpLength + 1;
-        int dataLen = bytes.length - dataStart - 6; // -6 for checksum
+        int dataLen = bytes.length - dataStart - BECH32_CHECKSUM_LENGTH; // -6 for checksum
 
         // pre-calculate output size
         int outCapacity = (dataLen * 5) / 8;
@@ -379,9 +407,15 @@ public class Bech32 {
         return chk;
     }
 
-    private static boolean verifyChecksum(@Nonnull byte[] combinedData, int hrpLength, int dataOffset) {
+    private static int verifyChecksumAndDetectPolymodVariant(@Nonnull byte[] combinedData, int hrpLength, int dataOffset) {
         int p = polymod(combinedData, hrpLength, null, combinedData, dataOffset);
-        return (1 == p);
+        if (ChecksumVariant.BECH32_CONST == p) {
+            return ChecksumVariant.BECH32_CONST;
+        }
+        if (ChecksumVariant.BECH32M_CONST == p) {
+            return ChecksumVariant.BECH32M_CONST;
+        }
+        return 0;
     }
 
     private static int polymod(byte b, int chk) {
