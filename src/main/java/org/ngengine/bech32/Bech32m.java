@@ -109,4 +109,15 @@ public final class Bech32m {
         throws Bech32DecodingException, Bech32InvalidChecksumException, Bech32InvalidRangeException {
         return Bech32.bech32Decode(bech, -1, new ChecksumVariant().requireVariant(ChecksumVariant.BECH32M_CONST), outputFormat);
     }
+
+    /**
+     * Extract the HRP (Human Readable Part) from a Bech32m string.
+     * @param bech the Bech32m encoded string
+     * @return the HRP as a byte array
+     * @throws Bech32DecodingException if the string is invalid
+     */
+    @Nonnull
+    public static byte[] hrp(@Nonnull String bech) throws Bech32DecodingException, Bech32InvalidRangeException {
+        return Bech32.hrp(bech);
+    }
 }

@@ -289,6 +289,40 @@ public class Bech32 {
     }
 
     /**
+     * Extract the HRP (Human Readable Part) from a Bech32 string.
+     * @param bech the Bech32 encoded string
+     * @return the HRP as a byte array
+     * @throws Bech32DecodingException if the string is invalid
+     * @throws Bech32InvalidRangeException
+     */
+    @Nonnull
+    public static byte[] hrp(@Nonnull String bech) throws Bech32DecodingException, Bech32InvalidRangeException {
+        byte[] bytes = getLowerCaseBytes(bech);
+
+        int hrpLength = 0;
+        for (int i = bytes.length - 1; i >= 0; i--) {
+            if (bytes[i] == BECH32_SEPARATOR) {
+                hrpLength = i;
+                break;
+            }
+        }
+
+        if (hrpLength == 0 || hrpLength == bytes.length) {
+            throw new Bech32DecodingException("invalid bech32 string: no separator found");
+        }
+
+        if (hrpLength < BECH32_MIN_HRP_LENGTH || hrpLength > BECH32_MAX_HRP_LENGTH) {
+            throw new Bech32DecodingException(
+                "HRP length must be between " + BECH32_MIN_HRP_LENGTH + " and " + BECH32_MAX_HRP_LENGTH + " characters"
+            );
+        }
+
+        byte[] hrp = new byte[hrpLength];
+        System.arraycopy(bytes, 0, hrp, 0, hrpLength);
+        return hrp;
+    }
+
+    /**
      * Decode a Bech32 string into a ByteBuffer.
      * @param bech the Bech32 encoded string, must be lower case
      * @return a ByteBuffer containing the decoded data, the position will be set to 0 and the limit to the length of the data
