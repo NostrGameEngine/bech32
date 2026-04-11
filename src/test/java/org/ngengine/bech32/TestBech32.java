@@ -522,6 +522,106 @@ public class TestBech32 {
     }
 
     @Test
+    public void vectorBits5RoundtripBech32() throws Exception {
+        Gson gson = new Gson();
+        JsonObject json = gson.fromJson(readVectorJson(), JsonObject.class);
+        JsonArray encodeVectors = json.getAsJsonArray("encodeVectors");
+
+        int validated = 0;
+        for (int i = 0; i < encodeVectors.size(); i++) {
+            // vector.json is large; sample deterministically while keeping broad coverage
+            if (i >= 500 && (i % 17) != 0) {
+                continue;
+            }
+
+            JsonObject vec = encodeVectors.get(i).getAsJsonObject();
+            String hrp = vec.get("hrp").getAsString();
+            String payloadHex = vec.get("payloadHex").getAsString();
+            String expectedEncoded = vec.get("expectedEncoded").getAsString();
+
+            byte[] payload = hexToBytes(payloadHex);
+
+            ByteBuffer words = Bech32.bech32Decode(
+                expectedEncoded,
+                -1,
+                new ChecksumVariant().requireVariant(ChecksumVariant.BECH32_CONST),
+                Bech32.DataFormat.BITS_5
+            );
+
+            for (int w = 0; w < words.remaining(); w++) {
+                int value = words.get(w) & 0xFF;
+                assertTrue("word must be in 5-bit range for vector index " + i, value <= 31);
+            }
+
+            String encodedFromWords = Bech32.bech32Encode(
+                hrp.getBytes(StandardCharsets.UTF_8),
+                words,
+                Bech32.DataFormat.BITS_5,
+                new byte[6],
+                -1
+            );
+            assertEquals("BITS_5 encode mismatch for vector index " + i, expectedEncoded, encodedFromWords);
+
+            ByteBuffer decoded8 = Bech32.bech32Decode(encodedFromWords);
+            byte[] decoded8Bytes = new byte[decoded8.remaining()];
+            decoded8.get(decoded8Bytes);
+            assertEquals("BITS_5->BITS_8 payload mismatch for vector index " + i, payloadHex, bytesToHex(decoded8Bytes));
+
+            validated++;
+        }
+
+        assertTrue("expected sampled BITS_5 bech32 vectors to run", validated > 0);
+    }
+
+    @Test
+    public void vectorBits5RoundtripBech32m() throws Exception {
+        Gson gson = new Gson();
+        JsonObject json = gson.fromJson(readVectorJson(), JsonObject.class);
+        JsonArray encodeVectors = json.getAsJsonArray("encodeVectors");
+
+        int validated = 0;
+        for (int i = 0; i < encodeVectors.size(); i++) {
+            // vector.json is large; sample deterministically while keeping broad coverage
+            if (i >= 500 && (i % 17) != 0) {
+                continue;
+            }
+
+            JsonObject vec = encodeVectors.get(i).getAsJsonObject();
+            String hrp = vec.get("hrp").getAsString();
+            String payloadHex = vec.get("payloadHex").getAsString();
+            byte[] payload = hexToBytes(payloadHex);
+
+            String encodedM = Bech32m.bech32mEncode(
+                hrp.getBytes(StandardCharsets.UTF_8),
+                ByteBuffer.wrap(payload),
+                Bech32.DataFormat.BITS_8
+            );
+
+            ByteBuffer wordsM = Bech32m.bech32mDecode(encodedM, Bech32.DataFormat.BITS_5);
+            for (int w = 0; w < wordsM.remaining(); w++) {
+                int value = wordsM.get(w) & 0xFF;
+                assertTrue("bech32m word must be in 5-bit range for vector index " + i, value <= 31);
+            }
+
+            String encodedMFromWords = Bech32m.bech32mEncode(
+                hrp.getBytes(StandardCharsets.UTF_8),
+                wordsM,
+                Bech32.DataFormat.BITS_5
+            );
+            assertEquals("BITS_5 bech32m encode mismatch for vector index " + i, encodedM, encodedMFromWords);
+
+            ByteBuffer decodedM8 = Bech32m.bech32mDecode(encodedMFromWords);
+            byte[] decodedM8Bytes = new byte[decodedM8.remaining()];
+            decodedM8.get(decodedM8Bytes);
+            assertEquals("BITS_5 bech32m payload mismatch for vector index " + i, payloadHex, bytesToHex(decodedM8Bytes));
+
+            validated++;
+        }
+
+        assertTrue("expected sampled BITS_5 bech32m vectors to run", validated > 0);
+    }
+
+    @Test
     public void vectorInvalidRegression() throws Exception {
         Gson gson = new Gson();
         JsonObject json = gson.fromJson(readVectorJson(), JsonObject.class);
