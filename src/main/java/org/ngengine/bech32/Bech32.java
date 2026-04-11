@@ -47,6 +47,11 @@ public class Bech32 {
     private static final int BECH32_MIN_HRP_LENGTH = 1;
     private static final int BECH32_MAX_HRP_LENGTH = 83;
 
+    public enum DataFormat {
+        BITS_8,
+        BITS_5,
+    }
+
     static {
         // Initialize reverse charset lookup table with -1 (invalid)
         for (int i = 0; i < CHARSET_REV.length; i++) {
@@ -73,8 +78,14 @@ public class Bech32 {
      */
     @Nonnull
     public static String bech32Encode(@Nonnull byte[] hrp, @Nonnull ByteBuffer data) throws Bech32EncodingException {
+        return bech32Encode(hrp, data, DataFormat.BITS_8);
+    }
+
+    @Nonnull
+    public static String bech32Encode(@Nonnull byte[] hrp, @Nonnull ByteBuffer data, @Nonnull DataFormat dataFormat)
+        throws Bech32EncodingException {
         byte[] chk = new byte[6];
-        return bech32Encode(hrp, data, chk, -1);
+        return bech32Encode(hrp, data, dataFormat, chk, -1);
     }
 
     /**
@@ -88,8 +99,18 @@ public class Bech32 {
     @Nonnull
     public static String bech32Encode(@Nonnull byte[] hrp, @Nonnull ByteBuffer data, int maxLength)
         throws Bech32EncodingException {
+        return bech32Encode(hrp, data, DataFormat.BITS_8, maxLength);
+    }
+
+    @Nonnull
+    public static String bech32Encode(
+        @Nonnull byte[] hrp,
+        @Nonnull ByteBuffer data,
+        @Nonnull DataFormat dataFormat,
+        int maxLength
+    ) throws Bech32EncodingException {
         byte[] chk = new byte[6];
-        return bech32Encode(hrp, data, chk, maxLength);
+        return bech32Encode(hrp, data, dataFormat, chk, maxLength);
     }
 
     /**
@@ -103,7 +124,17 @@ public class Bech32 {
     @Nonnull
     public static String bech32Encode(@Nonnull byte[] hrp, @Nonnull ByteBuffer data, @Nonnull byte[] chkOut)
         throws Bech32EncodingException {
-        return bech32Encode(hrp, data, chkOut, -1);
+        return bech32Encode(hrp, data, DataFormat.BITS_8, chkOut, -1);
+    }
+
+    @Nonnull
+    public static String bech32Encode(
+        @Nonnull byte[] hrp,
+        @Nonnull ByteBuffer data,
+        @Nonnull DataFormat dataFormat,
+        @Nonnull byte[] chkOut
+    ) throws Bech32EncodingException {
+        return bech32Encode(hrp, data, dataFormat, chkOut, -1);
     }
 
     /**
@@ -118,7 +149,18 @@ public class Bech32 {
     @Nonnull
     public static String bech32Encode(@Nonnull byte[] hrp, @Nonnull ByteBuffer data, @Nonnull byte[] chkOut, int maxLength)
         throws Bech32EncodingException {
-        return bech32Encode(ChecksumVariant.BECH32_CONST, hrp, data, chkOut, maxLength);
+        return bech32Encode(hrp, data, DataFormat.BITS_8, chkOut, maxLength);
+    }
+
+    @Nonnull
+    public static String bech32Encode(
+        @Nonnull byte[] hrp,
+        @Nonnull ByteBuffer data,
+        @Nonnull DataFormat dataFormat,
+        @Nonnull byte[] chkOut,
+        int maxLength
+    ) throws Bech32EncodingException {
+        return bech32Encode(ChecksumVariant.BECH32_CONST, hrp, data, dataFormat, chkOut, maxLength);
     }
 
     @Nonnull
@@ -126,6 +168,7 @@ public class Bech32 {
         int checksumConstant,
         @Nonnull byte[] hrp,
         @Nonnull ByteBuffer data,
+        @Nonnull DataFormat dataFormat,
         @Nonnull byte[] chkOut,
         int maxLength
     ) throws Bech32EncodingException {
@@ -140,11 +183,13 @@ public class Bech32 {
             );
         }
 
+        boolean dataIs5bit = dataFormat == DataFormat.BITS_5;
+
         ByteBuffer src = data.slice();
         int dataLen = src.remaining();
 
         // Calculate exact output size: HRP + '1' + (data8 * 8 + 4) / 5 + 6
-        int data5Len = (dataLen * 8 + 4) / 5;
+        int data5Len = dataIs5bit ? dataLen : (dataLen * 8 + 4) / 5;
         int outputSize = hrp.length + 1 + data5Len + 6;
 
         // validate max length constraint (BIP-173)
@@ -188,32 +233,43 @@ public class Bech32 {
             chk = polymod(b, chk);
         }
 
-        // convert 8 to 5 bits and compute checksum on the fly
-        int acc = 0;
-        int bits = 0;
+        if (!dataIs5bit) {
+            // convert 8 to 5 bits and compute checksum on the fly
+            int acc = 0;
+            int bits = 0;
+            for (int i = 0; i < dataLen; i++) {
+                int value = src.get(i) & 0xFF;
+                if ((value >> 8) != 0) {
+                    throw new Bech32EncodingException("input value is outside of range");
+                }
+                acc = (acc << 8) | value;
+                bits += 8;
 
-        for (int i = 0; i < dataLen; i++) {
-            int value = src.get(i) & 0xFF;
-            if ((value >> 8) != 0) {
-                throw new Bech32EncodingException("input value is outside of range");
+                // emit 5-bit groups as we accumulate them
+                while (bits >= 5) {
+                    bits -= 5;
+                    int v5 = (acc >> bits) & 0x1f;
+                    output[outPos++] = CHARSET.charAt(v5);
+                    chk = polymod((byte) v5, chk);
+                }
             }
-            acc = (acc << 8) | value;
-            bits += 8;
 
-            // emit 5-bit groups as we accumulate them
-            while (bits >= 5) {
-                bits -= 5;
-                int v5 = (acc >> bits) & 0x1f;
+            // padding
+            if (bits > 0) {
+                int v5 = (acc << (5 - bits)) & 0x1f;
                 output[outPos++] = CHARSET.charAt(v5);
                 chk = polymod((byte) v5, chk);
             }
-        }
-
-        // padding
-        if (bits > 0) {
-            int v5 = (acc << (5 - bits)) & 0x1f;
-            output[outPos++] = CHARSET.charAt(v5);
-            chk = polymod((byte) v5, chk);
+        } else {
+            // data is already in 5-bit groups, just write it and compute checksum
+            for (int i = 0; i < dataLen; i++) {
+                int value = src.get(i) & 0xFF;
+                if (value >> 5 != 0) {
+                    throw new Bech32EncodingException("input value is outside of range");
+                }
+                output[outPos++] = CHARSET.charAt(value);
+                chk = polymod((byte) value, chk);
+            }
         }
 
         // apply polymod to checksum padding (always 6 zero bits)
@@ -243,7 +299,13 @@ public class Bech32 {
     @Nonnull
     public static ByteBuffer bech32Decode(@Nonnull String bech)
         throws Bech32DecodingException, Bech32InvalidChecksumException, Bech32InvalidRangeException {
-        return bech32Decode(bech, -1, new ChecksumVariant().requireVariant(ChecksumVariant.BECH32_CONST));
+        return bech32Decode(bech, DataFormat.BITS_8);
+    }
+
+    @Nonnull
+    public static ByteBuffer bech32Decode(@Nonnull String bech, @Nonnull DataFormat outputFormat)
+        throws Bech32DecodingException, Bech32InvalidChecksumException, Bech32InvalidRangeException {
+        return bech32Decode(bech, -1, new ChecksumVariant().requireVariant(ChecksumVariant.BECH32_CONST), outputFormat);
     }
 
     /**
@@ -258,18 +320,43 @@ public class Bech32 {
     @Nonnull
     public static ByteBuffer bech32Decode(@Nonnull String bech, int maxLength)
         throws Bech32DecodingException, Bech32InvalidChecksumException, Bech32InvalidRangeException {
-        return bech32Decode(bech, maxLength, new ChecksumVariant().requireVariant(ChecksumVariant.BECH32_CONST));
+        return bech32Decode(bech, maxLength, DataFormat.BITS_8);
+    }
+
+    @Nonnull
+    public static ByteBuffer bech32Decode(@Nonnull String bech, int maxLength, @Nonnull DataFormat outputFormat)
+        throws Bech32DecodingException, Bech32InvalidChecksumException, Bech32InvalidRangeException {
+        return bech32Decode(bech, maxLength, new ChecksumVariant().requireVariant(ChecksumVariant.BECH32_CONST), outputFormat);
     }
 
     @Nonnull
     public static ByteBuffer bech32Decode(@Nonnull String bech, @Nonnull ChecksumVariant checksumVariant)
         throws Bech32DecodingException, Bech32InvalidChecksumException, Bech32InvalidRangeException {
-        return bech32Decode(bech, -1, checksumVariant);
+        return bech32Decode(bech, checksumVariant, DataFormat.BITS_8);
+    }
+
+    @Nonnull
+    public static ByteBuffer bech32Decode(
+        @Nonnull String bech,
+        @Nonnull ChecksumVariant checksumVariant,
+        @Nonnull DataFormat outputFormat
+    ) throws Bech32DecodingException, Bech32InvalidChecksumException, Bech32InvalidRangeException {
+        return bech32Decode(bech, -1, checksumVariant, outputFormat);
     }
 
     @Nonnull
     public static ByteBuffer bech32Decode(@Nonnull String bech, int maxLength, @Nonnull ChecksumVariant checksumVariant)
         throws Bech32DecodingException, Bech32InvalidChecksumException, Bech32InvalidRangeException {
+        return bech32Decode(bech, maxLength, checksumVariant, DataFormat.BITS_8);
+    }
+
+    @Nonnull
+    public static ByteBuffer bech32Decode(
+        @Nonnull String bech,
+        int maxLength,
+        @Nonnull ChecksumVariant checksumVariant,
+        DataFormat outputFormat
+    ) throws Bech32DecodingException, Bech32InvalidChecksumException, Bech32InvalidRangeException {
         if (maxLength > 0 && bech.length() > maxLength) {
             throw new Bech32DecodingException("string exceeds maximum length of " + maxLength);
         }
@@ -331,34 +418,45 @@ public class Bech32 {
 
         // extract data portion (5-bit values, excluding HRP and checksum)
         int dataStart = hrpLength + 1;
-        int dataLen = bytes.length - dataStart - BECH32_CHECKSUM_LENGTH; // -6 for checksum
 
-        // pre-calculate output size
-        int outCapacity = (dataLen * 5) / 8;
-        byte[] output = new byte[outCapacity];
-        int outPos = 0;
+        if (outputFormat == DataFormat.BITS_8) {
+            int dataLen = bytes.length - dataStart - BECH32_CHECKSUM_LENGTH; // -6 for checksum
 
-        // 5 to 8 bit conversion
-        int acc = 0;
-        int bits = 0;
-        for (int i = 0; i < dataLen; i++) {
-            int value = bytes[dataStart + i];
-            acc = (acc << 5) | value;
-            bits += 5;
+            // pre-calculate output size
+            int outCapacity = (dataLen * 5) / 8;
+            byte[] output = new byte[outCapacity];
+            int outPos = 0;
 
-            while (bits >= 8) {
-                bits -= 8;
-                int byte8 = (acc >> bits) & 0xff;
-                output[outPos++] = (byte) byte8;
+            // convert 5-bit groups to 8-bit bytes
+            // 5 to 8 bit conversion
+            int acc = 0;
+            int bits = 0;
+            for (int i = 0; i < dataLen; i++) {
+                int value = bytes[dataStart + i];
+                acc = (acc << 5) | value;
+                bits += 5;
+
+                while (bits >= 8) {
+                    bits -= 8;
+                    int byte8 = (acc >> bits) & 0xff;
+                    output[outPos++] = (byte) byte8;
+                }
             }
-        }
 
-        // check remaining bits (should be < 5 and padding should be 0)
-        if (bits >= 5 || (((acc << (8 - bits)) & 0xff) != 0)) {
-            throw new Bech32DecodingException("could not convert bits");
+            // check remaining bits (should be < 5 and padding should be 0)
+            if (bits >= 5 || (((acc << (8 - bits)) & 0xff) != 0)) {
+                throw new Bech32DecodingException("could not convert bits");
+            }
+            return ByteBuffer.wrap(output, 0, outPos).slice();
+        } else {
+            int dataLen = bytes.length - dataStart - BECH32_CHECKSUM_LENGTH; // -6 for checksum
+            ByteBuffer output = ByteBuffer.allocate(dataLen);
+            for (int i = 0; i < dataLen; i++) {
+                output.put(bytes[dataStart + i]);
+            }
+            output.flip();
+            return output;
         }
-
-        return ByteBuffer.wrap(output, 0, outPos).slice();
     }
 
     private static int polymod(

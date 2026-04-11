@@ -32,6 +32,7 @@ package org.ngengine.bech32;
 
 import jakarta.annotation.Nonnull;
 import java.nio.ByteBuffer;
+import org.ngengine.bech32.Bech32.DataFormat;
 
 public final class Bech32m {
 
@@ -39,30 +40,73 @@ public final class Bech32m {
 
     @Nonnull
     public static String bech32mEncode(@Nonnull byte[] hrp, @Nonnull ByteBuffer data) throws Bech32EncodingException {
-        return bech32mEncode(hrp, data, new byte[6], -1);
+        return bech32mEncode(hrp, data, DataFormat.BITS_8);
+    }
+
+    @Nonnull
+    public static String bech32mEncode(@Nonnull byte[] hrp, @Nonnull ByteBuffer data, @Nonnull DataFormat dataFormat)
+        throws Bech32EncodingException {
+        return bech32mEncode(hrp, data, dataFormat, new byte[6], -1);
     }
 
     @Nonnull
     public static String bech32mEncode(@Nonnull byte[] hrp, @Nonnull ByteBuffer data, int maxLength)
         throws Bech32EncodingException {
-        return bech32mEncode(hrp, data, new byte[6], maxLength);
+        return bech32mEncode(hrp, data, DataFormat.BITS_8, maxLength);
+    }
+
+    @Nonnull
+    public static String bech32mEncode(
+        @Nonnull byte[] hrp,
+        @Nonnull ByteBuffer data,
+        @Nonnull DataFormat dataFormat,
+        int maxLength
+    ) throws Bech32EncodingException {
+        return bech32mEncode(hrp, data, dataFormat, new byte[6], maxLength);
     }
 
     @Nonnull
     public static String bech32mEncode(@Nonnull byte[] hrp, @Nonnull ByteBuffer data, @Nonnull byte[] chkOut)
         throws Bech32EncodingException {
-        return bech32mEncode(hrp, data, chkOut, -1);
+        return bech32mEncode(hrp, data, DataFormat.BITS_8, chkOut);
+    }
+
+    @Nonnull
+    public static String bech32mEncode(
+        @Nonnull byte[] hrp,
+        @Nonnull ByteBuffer data,
+        @Nonnull DataFormat dataFormat,
+        @Nonnull byte[] chkOut
+    ) throws Bech32EncodingException {
+        return bech32mEncode(hrp, data, dataFormat, chkOut, -1);
     }
 
     @Nonnull
     public static String bech32mEncode(@Nonnull byte[] hrp, @Nonnull ByteBuffer data, @Nonnull byte[] chkOut, int maxLength)
         throws Bech32EncodingException {
-        return Bech32.bech32Encode(ChecksumVariant.BECH32M_CONST, hrp, data, chkOut, maxLength);
+        return bech32mEncode(hrp, data, DataFormat.BITS_8, chkOut, maxLength);
+    }
+
+    @Nonnull
+    public static String bech32mEncode(
+        @Nonnull byte[] hrp,
+        @Nonnull ByteBuffer data,
+        @Nonnull DataFormat dataFormat,
+        @Nonnull byte[] chkOut,
+        int maxLength
+    ) throws Bech32EncodingException {
+        return Bech32.bech32Encode(ChecksumVariant.BECH32M_CONST, hrp, data, dataFormat, chkOut, maxLength);
     }
 
     @Nonnull
     public static ByteBuffer bech32mDecode(@Nonnull String bech)
         throws Bech32DecodingException, Bech32InvalidChecksumException, Bech32InvalidRangeException {
-        return Bech32.bech32Decode(bech, -1, new ChecksumVariant().requireVariant(ChecksumVariant.BECH32M_CONST));
+        return bech32mDecode(bech, DataFormat.BITS_8);
+    }
+
+    @Nonnull
+    public static ByteBuffer bech32mDecode(@Nonnull String bech, @Nonnull DataFormat outputFormat)
+        throws Bech32DecodingException, Bech32InvalidChecksumException, Bech32InvalidRangeException {
+        return Bech32.bech32Decode(bech, -1, new ChecksumVariant().requireVariant(ChecksumVariant.BECH32M_CONST), outputFormat);
     }
 }
