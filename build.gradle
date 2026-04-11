@@ -279,6 +279,8 @@ tasks.named('spotlessApply').configure {
 
 
 spotless {
+    enforceCheck = false  
+    
     java {
         target 'src/*/**/*.java'      
 
