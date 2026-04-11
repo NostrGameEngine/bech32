@@ -544,7 +544,7 @@ public class TestBech32 {
             ByteBuffer words = Bech32.bech32Decode(
                 expectedEncoded,
                 -1,
-                new ChecksumVariant().requireVariant(ChecksumVariant.BECH32_CONST),
+                new Bech32ChecksumVariant().requireVariant(Bech32ChecksumVariant.BECH32_CONST),
                 Bech32.DataFormat.BITS_5
             );
 
@@ -673,9 +673,9 @@ public class TestBech32 {
 
     @Test
     public void decodeExposesChecksumVariant() throws Exception {
-        ChecksumVariant variant = new ChecksumVariant();
+        Bech32ChecksumVariant variant = new Bech32ChecksumVariant();
         Bech32.bech32Decode("A12UEL5L", variant);
-        assertEquals(ChecksumVariant.BECH32_CONST, variant.getVariant());
+        assertEquals(Bech32ChecksumVariant.BECH32_CONST, variant.getVariant());
     }
 
     @Test

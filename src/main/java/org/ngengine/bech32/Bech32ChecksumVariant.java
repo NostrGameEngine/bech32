@@ -32,7 +32,7 @@ package org.ngengine.bech32;
 
 import jakarta.annotation.Nonnull;
 
-public final class ChecksumVariant {
+public final class Bech32ChecksumVariant {
 
     public static final int BECH32_CONST = 1;
     public static final int BECH32M_CONST = 0x2bc830a3;
@@ -41,7 +41,7 @@ public final class ChecksumVariant {
     private int requiredVariant;
 
     @Nonnull
-    public ChecksumVariant requireVariant(int requiredVariant) {
+    public Bech32ChecksumVariant requireVariant(int requiredVariant) {
         this.requiredVariant = requiredVariant;
         return this;
     }
