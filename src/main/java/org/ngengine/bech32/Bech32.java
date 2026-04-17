@@ -189,15 +189,19 @@ public class Bech32 {
         int dataLen = src.remaining();
 
         // Calculate exact output size: HRP + '1' + (data8 * 8 + 4) / 5 + 6
-        int data5Len = dataIs5bit ? dataLen : (dataLen * 8 + 4) / 5;
-        int outputSize = hrp.length + 1 + data5Len + 6;
+        long data5Len = dataIs5bit ? dataLen : (dataLen * 8 + 4) / 5;
+        long outputSize = hrp.length + 1 + data5Len + 6;
+
+        if(data5Len < 0 || data5Len > Integer.MAX_VALUE || outputSize < 0 || outputSize > Integer.MAX_VALUE) {
+            throw new Bech32EncodingException("data length is too large or invalid");
+        }
 
         // validate max length constraint (BIP-173)
         if (maxLength > 0 && outputSize > maxLength) {
             throw new Bech32EncodingException("encoded string would exceed maximum length of " + maxLength);
         }
 
-        char[] output = new char[outputSize];
+        char[] output = new char[(int)outputSize];
         int outPos = 0;
 
         // write HRP in lowercase and validate characters
@@ -290,9 +294,12 @@ public class Bech32 {
 
     /**
      * Extract the HRP (Human Readable Part) from a Bech32 string.
+     * This method does no validation and is intended for use cases where you only need the HRP and want to avoid the overhead of full decoding.
+     * Use {@link #bech32Decode} if you need to validate the string and extract the data as well.
+     * 
      * @param bech the Bech32 encoded string
      * @return the HRP as a byte array
-     * @throws Bech32DecodingException if the string is invalid
+     * @throws Bech32DecodingException if the HRP is invalid
      * @throws Bech32InvalidRangeException
      */
     @Nonnull
@@ -464,11 +471,16 @@ public class Bech32 {
         int dataStart = hrpLength + 1;
 
         if (outputFormat == DataFormat.BITS_8) {
-            int dataLen = bytes.length - dataStart - BECH32_CHECKSUM_LENGTH; // -6 for checksum
+            long dataLen = bytes.length - dataStart - BECH32_CHECKSUM_LENGTH; // -6 for checksum      
 
             // pre-calculate output size
-            int outCapacity = (dataLen * 5) / 8;
-            byte[] output = new byte[outCapacity];
+            long outCapacity = (dataLen * 5) / 8;
+
+            if(dataLen < 0 || dataLen > Integer.MAX_VALUE || outCapacity < 0 || outCapacity > Integer.MAX_VALUE) {
+                throw new Bech32DecodingException("data length is too large or invalid");
+            }
+
+            byte[] output = new byte[(int)outCapacity];
             int outPos = 0;
 
             // convert 5-bit groups to 8-bit bytes
@@ -493,8 +505,12 @@ public class Bech32 {
             }
             return ByteBuffer.wrap(output, 0, outPos).slice();
         } else {
-            int dataLen = bytes.length - dataStart - BECH32_CHECKSUM_LENGTH; // -6 for checksum
-            ByteBuffer output = ByteBuffer.allocate(dataLen);
+            long dataLen = bytes.length - dataStart - BECH32_CHECKSUM_LENGTH; // -6 for checksum
+            if(dataLen < 0 || dataLen > Integer.MAX_VALUE) {
+                throw new Bech32DecodingException("data length is too large or invalid");
+            }
+
+            ByteBuffer output = ByteBuffer.allocate((int)dataLen);
             for (int i = 0; i < dataLen; i++) {
                 output.put(bytes[dataStart + i]);
             }
