@@ -14,7 +14,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'org.ngengine:bech32:1.1.1'
+    implementation 'org.ngengine:bech32:1.2.0'
 }
 
 ```
